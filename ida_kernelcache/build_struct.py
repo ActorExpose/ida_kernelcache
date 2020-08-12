@@ -1,3 +1,6 @@
+import ida_bytes
+import ida_bytes
+import ida_bytes
 #
 # ida_kernelcache/build_struct.py
 # Brandon Azad
@@ -44,7 +47,7 @@ def create_struct_fields(sid=None, name=None, accesses=None, create=False, base=
             _log(0, 'Could not open struct {}', name)
             return False
     else:
-        name = idc.GetStrucName(sid)
+        name = ida_struct.get_struc_name(sid)
         if name is None:
             _log(0, 'Invalid struct id {}', sid)
             return False

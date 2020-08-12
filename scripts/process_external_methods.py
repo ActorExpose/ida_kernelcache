@@ -1,3 +1,6 @@
+import ida_bytes
+import ida_bytes
+import ida_bytes
 #
 # scripts/process_external_methods.py
 # Brandon Azad
@@ -81,7 +84,7 @@ def kernelcache_process_external_methods(ea=None, struct_type=None, count=None):
 
     # Get the EA.
     if ea is None:
-        ea = idc.ScreenEA()
+        ea = idc.get_screen_ea()
 
     # Get the struct_type and the check and process functions.
     if struct_type is None:

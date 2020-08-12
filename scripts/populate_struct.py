@@ -1,3 +1,6 @@
+import ida_bytes
+import ida_bytes
+import ida_bytes
 #
 # scripts/populate_struct.py
 # Brandon Azad
@@ -36,7 +39,7 @@ Automatically populate struct fields
         f = MyForm()
         f.Compile()
         f.structure.value = struct or ''
-        f.address.value   = address or idc.ScreenEA()
+        f.address.value   = address or idc.get_screen_ea()
         f.register.value  = register or 'X0'
         f.delta.value     = delta or 0
         ok = f.Execute()

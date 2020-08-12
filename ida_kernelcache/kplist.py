@@ -1,3 +1,6 @@
+import ida_bytes
+import ida_bytes
+import ida_bytes
 #
 # ida_kernelcache/kplist.py
 # Brandon Azad

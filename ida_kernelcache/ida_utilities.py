@@ -1,3 +1,6 @@
+import ida_bytes
+import ida_name
+import ida_funcs
 #
 # ida_kernelcache/ida_utilities.py
 # Brandon Azad
@@ -10,6 +13,8 @@ from collections import deque
 import idc
 import idautils
 import idaapi
+import ida_struct
+import ida_auto
 
 def make_log(log_level, module):
     """Create a logging function."""
@@ -82,7 +87,7 @@ def is_mapped(ea, size=1, value=True):
         raise ValueError('Invalid argument: size={}'.format(size))
     # HACK: We only check the first and last byte, not all the bytes in between.
     if value:
-        return idc.isLoaded(ea) and (size == 1 or idc.isLoaded(ea + size - 1))
+        return ida_bytes.is_loaded(ea) and (size == 1 or ida_bytes.is_loaded(ea + size - 1))
     else:
         return idaapi.getseg(ea) and (size == 1 or idaapi.getseg(ea + size - 1))
 
@@ -104,7 +109,7 @@ def get_name_ea(name, fromaddr=idc.BADADDR):
     Returns:
         The address of the name or BADADDR.
     """
-    return idc.LocByNameEx(fromaddr, name)
+    return ida_name.get_name_ea(fromaddr, name)
 
 def get_ea_name(ea, fromaddr=idc.BADADDR, true=False, user=False):
     """Get the name of an address.
@@ -125,12 +130,14 @@ def get_ea_name(ea, fromaddr=idc.BADADDR, true=False, user=False):
     Returns:
         The name of the address or "".
     """
-    if user and not idc.hasUserName(idc.GetFlags(ea)):
+    if user and not idc.hasUserName(ida_bytes.get_full_flags(ea)):
         return ""
     if true:
-        return idc.GetTrueNameEx(fromaddr, ea)
+        #return idc.get_name(fromaddr, ea)
+        return idc.get_name(ea, ida_name.GN_VISIBLE)
     else:
-        return idc.NameEx(fromaddr, ea)
+        #return idc.get_name(fromaddr, ea)
+        return idc.get_name(ea, ida_name.GN_VISIBLE)
 
 def set_ea_name(ea, name, rename=False, auto=False):
     """Set the name of an address.
@@ -148,20 +155,20 @@ def set_ea_name(ea, name, rename=False, auto=False):
     Returns:
         True if the address was successfully named (or renamed).
     """
-    if not rename and idc.hasUserName(idc.GetFlags(ea)):
+    if not rename and idc.hasUserName(ida_bytes.get_full_flags(ea)):
         return get_ea_name(ea) == name
     flags = idc.SN_CHECK
     if auto:
         flags |= idc.SN_AUTO
-    return bool(idc.MakeNameEx(ea, name, flags))
+    return bool(idc.set_name(ea, name, flags))
 
 def _insn_op_stroff_700(insn, n, sid, delta):
     """A wrapper of idc.OpStroffEx for IDA 7."""
-    return idc.OpStroffEx(insn, n, sid, delta)
+    return idc.op_stroff(insn, n, sid, delta)
 
 def _insn_op_stroff_695(insn, n, sid, delta):
     """A wrapper of idc.OpStroffEx for IDA 6.95."""
-    return idc.OpStroffEx(insn.ea, n, sid, delta)
+    return idc.op_stroff(insn.ea, n, sid, delta)
 
 if idaapi.IDA_SDK_VERSION < 700:
     insn_op_stroff = _insn_op_stroff_695
@@ -287,9 +294,9 @@ def Instructions(start, end=None, count=None):
 _FF_FLAG_FOR_SIZE = {
     1:  idc.FF_BYTE,
     2:  idc.FF_WORD,
-    4:  idc.FF_DWRD,
-    8:  idc.FF_QWRD,
-    16: idc.FF_OWRD,
+    4:  idc.FF_DWORD,
+    8:  idc.FF_QWORD,
+    16: idc.FF_OWORD,
 }
 
 def word_flag(wordsize=WORD_SIZE):
@@ -305,13 +312,13 @@ def read_word(ea, wordsize=WORD_SIZE):
     if not is_mapped(ea, wordsize):
         return None
     if wordsize == 1:
-        return idc.Byte(ea)
+        return idc.get_wide_byte(ea)
     if wordsize == 2:
-        return idc.Word(ea)
+        return idc.get_wide_word(ea)
     if wordsize == 4:
-        return idc.Dword(ea)
+        return idc.get_wide_dword(ea)
     if wordsize == 8:
-        return idc.Qword(ea)
+        return idc.get_qword(ea)
     raise ValueError('Invalid argument: wordsize={}'.format(wordsize))
 
 def patch_word(ea, value, wordsize=WORD_SIZE):
@@ -321,13 +328,13 @@ def patch_word(ea, value, wordsize=WORD_SIZE):
     appropriate.
     """
     if wordsize == 1:
-        idc.PatchByte(ea, value)
+        ida_bytes.patch_byte(ea, value)
     elif wordsize == 2:
-        idc.PatchWord(ea, value)
+        ida_bytes.patch_word(ea, value)
     elif wordsize == 4:
-        idc.PatchDword(ea, value)
+        ida_bytes.patch_dword(ea, value)
     elif wordsize == 8:
-        idc.PatchQword(ea, value)
+        ida_bytes.patch_qword(ea, value)
     else:
         raise ValueError('Invalid argument: wordsize={}'.format(wordsize))
 
@@ -345,36 +352,36 @@ class objectview(object):
 
 def _read_struct_member_once(ea, flags, size, member_sid, member_size, asobject):
     """Read part of a struct member for _read_struct_member."""
-    if idc.isByte(flags):
+    if ida_bytes.is_byte(flags):
         return read_word(ea, 1), 1
-    elif idc.isWord(flags):
+    elif ida_bytes.is_word(flags):
         return read_word(ea, 2), 2
-    elif idc.isDwrd(flags):
+    elif ida_bytes.is_dword(flags):
         return read_word(ea, 4), 4
-    elif idc.isQwrd(flags):
+    elif ida_bytes.is_qword(flags):
         return read_word(ea, 8), 8
-    elif idc.isOwrd(flags):
+    elif ida_bytes.is_oword(flags):
         return read_word(ea, 16), 16
-    elif idc.isASCII(flags):
-        return idc.GetManyBytes(ea, size), size
-    elif idc.isFloat(flags):
+    elif ida_bytes.is_strlit(flags):
+        return idc.get_bytes(ea, size), size
+    elif ida_bytes.is_float(flags):
         return idc.Float(ea), 4
-    elif idc.isDouble(flags):
+    elif ida_bytes.is_double(flags):
         return idc.Double(ea), 8
-    elif idc.isStruct(flags):
+    elif ida_bytes.is_struct(flags):
         value = read_struct(ea, sid=member_sid, asobject=asobject)
         return value, member_size
     return None, size
 
 def _read_struct_member(struct, sid, union, ea, offset, name, size, asobject):
     """Read a member into a struct for read_struct."""
-    flags = idc.GetMemberFlag(sid, offset)
+    flags = idc.get_member_flag(sid, offset)
     assert flags != -1
     # Extra information for parsing a struct.
     member_sid, member_ssize = None, None
-    if idc.isStruct(flags):
-        member_sid = idc.GetMemberStrId(sid, offset)
-        member_ssize = idc.GetStrucSize(member_sid)
+    if ida_bytes.is_struct(flags):
+        member_sid = idc.get_member_strid(sid, offset)
+        member_ssize = ida_struct.get_struc_size(member_sid)
     # Get the address of the start of the member.
     member = ea
     if not union:
@@ -414,7 +421,7 @@ def read_struct(ea, struct=None, sid=None, members=None, asobject=False):
     """
     # Handle sid/struct.
     if struct is not None:
-        sid2 = idc.GetStrucIdByName(struct)
+        sid2 = ida_struct.get_struc_id(struct)
         if sid2 == idc.BADADDR:
             raise ValueError('Invalid struc name {}'.format(struct))
         if sid is not None and sid2 != sid:
@@ -423,77 +430,81 @@ def read_struct(ea, struct=None, sid=None, members=None, asobject=False):
     else:
         if sid is None:
             raise ValueError('Invalid arguments: sid={}, struct={}'.format(sid, struct))
-        if idc.GetStrucName(sid) is None:
+        if ida_struct.get_struc_name(sid) is None:
             raise ValueError('Invalid struc id {}'.format(sid))
     # Iterate through the members and add them to the struct.
-    union = idc.IsUnion(sid)
+    union = idc.is_union(sid)
     struct = {}
     for offset, name, size in idautils.StructMembers(sid):
         if members is not None and name not in members:
             continue
         _read_struct_member(struct, sid, union, ea, offset, name, size, asobject)
     if asobject:
-        struct = objectview(struct, ea, idc.GetStrucSize(sid))
+        struct = objectview(struct, ea, ida_struct.get_struc_size(sid))
     return struct
 
 def null_terminated(string):
     """Extract the NULL-terminated C string from the given array of bytes."""
     return string.split('\0', 1)[0]
 
+def autoanalyze():
+    ida_auto.auto_wait()
+
 def _convert_address_to_function(func):
     """Convert an address that IDA has classified incorrectly into a proper function."""
     # If everything goes wrong, we'll try to restore this function.
-    orig = idc.FirstFuncFchunk(func)
+    orig = idc.first_func_chunk(func)
     # If the address is not code, let's undefine whatever it is.
-    if not idc.isCode(idc.GetFlags(func)):
+    if not ida_bytes.is_code(ida_bytes.get_full_flags(func)):
         if not is_mapped(func):
             # Well, that's awkward.
             return False
-        item    = idc.ItemHead(func)
-        itemend = idc.ItemEnd(func)
+        item    = ida_bytes.get_item_head(func)
+        itemend = ida_bytes.get_item_end(func)
         if item != idc.BADADDR:
             _log(1, 'Undefining item {:#x} - {:#x}', item, itemend)
-            idc.MakeUnkn(item, idc.DOUNK_EXPAND)
-            idc.MakeCode(func)
+            ida_bytes.del_items(item, ida_bytes.DELIT_EXPAND)
+            idc.create_insn(func)
             # Give IDA a chance to analyze the new code or else we won't be able to create a
             # function.
-            idc.Wait()
-            idc.AnalyseArea(item, itemend)
+            #ida_auto.auto_wait()
+            autoanalyze()
+            idc.plan_and_wait(item, itemend)
     else:
         # Just try removing the chunk from its current function. IDA can add it to another function
         # automatically, so make sure it's removed from all functions by doing it in loop until it
         # fails.
         for i in range(1024):
-            if not idc.RemoveFchunk(func, func):
+            if not idc.remove_fchunk(func, func):
                 break
     # Now try making a function.
-    if idc.MakeFunction(func) != 0:
+    if ida_funcs.add_func(func) != 0:
         return True
     # This is a stubborn chunk. Try recording the list of chunks, deleting the original function,
     # creating the new function, then re-creating the original function.
     if orig != idc.BADADDR:
         chunks = list(idautils.Chunks(orig))
-        if idc.DelFunction(orig) != 0:
+        if ida_funcs.del_func(orig) != 0:
             # Ok, now let's create the new function, and recreate the original.
-            if idc.MakeFunction(func) != 0:
-                if idc.MakeFunction(orig) != 0:
+            if ida_funcs.add_func(func) != 0:
+                if ida_funcs.add_func(orig) != 0:
                     # Ok, so we created the functions! Now, if any of the original chunks are not
                     # contained in a function, we'll abort and undo.
                     if all(idaapi.get_func(start) for start, end in chunks):
                         return True
             # Try to undo the damage.
             for start, _ in chunks:
-                idc.DelFunction(start)
+                ida_funcs.del_func(start)
     # Everything we've tried so far has failed. If there was originally a function, try to restore
     # it.
     if orig != idc.BADADDR:
         _log(0, 'Trying to restore original function {:#x}', orig)
-        idc.MakeFunction(orig)
+        ida_funcs.add_func(orig)
     return False
 
 def is_function_start(ea):
     """Return True if the address is the start of a function."""
-    return idc.GetFunctionAttr(ea, idc.FUNCATTR_START) == ea
+    return idc.get_func_attr(ea, idc.FUNCATTR_START) == ea
 
 def force_function(addr):
     """Ensure that the given address is a function type, converting it if necessary."""
@@ -546,20 +557,20 @@ def struct_create(name, union=False):
     # AddStrucEx is documented as returning -1 on failure, but in practice it seems to return
     # BADADDR.
     union = 1 if union else 0
-    sid = idc.AddStrucEx(-1, name, union)
+    sid = idc.add_struc(-1, name, union)
     if sid in (-1, idc.BADADDR):
         return None
     return sid
 
 def struct_open(name, create=False, union=None):
     """Get the SID of the IDA struct with the given name, optionally creating it."""
-    sid = idc.GetStrucIdByName(name)
+    sid = ida_struct.get_struc_id(name)
     if sid == idc.BADADDR:
         if not create:
             return None
         sid = struct_create(name, union=bool(union))
     elif union is not None:
-        is_union = bool(idc.IsUnion(sid))
+        is_union = bool(idc.is_union(sid))
         if union != is_union:
             return None
     return sid
@@ -579,7 +590,7 @@ def struct_add_word(sid, name, offset, size, count=1):
 
     If sid is a union, offset must be -1.
     """
-    return idc.AddStrucMember(sid, name, offset, idc.FF_DATA | word_flag(size), -1, size * count)
+    return idc.add_struc_member(sid, name, offset, idc.FF_DATA | word_flag(size), -1, size * count)
 
 def struct_add_ptr(sid, name, offset, count=1, type=None):
     """Add a pointer to a structure.
@@ -587,12 +598,12 @@ def struct_add_ptr(sid, name, offset, count=1, type=None):
     If sid is a union, offset must be -1.
     """
     ptr_flag = idc.FF_DATA | word_flag(WORD_SIZE) | idaapi.offflag()
-    ret = idc.AddStrucMember(sid, name, offset, ptr_flag, 0, WORD_SIZE)
+    ret = idc.add_struc_member(sid, name, offset, ptr_flag, 0, WORD_SIZE)
     if ret == 0 and type is not None:
         if offset == -1:
             offset = struct_member_offset(sid, name)
             assert offset is not None
-        mid = idc.GetMemberId(sid, offset)
+        mid = idc.get_member_id(sid, offset)
         idc.SetType(mid, type)
     return ret
 
@@ -601,6 +612,6 @@ def struct_add_struct(sid, name, offset, msid, count=1):
 
     If sid is a union, offset must be -1.
     """
-    size = idc.GetStrucSize(msid)
-    return idc.AddStrucMember(sid, name, offset, idc.FF_DATA | idc.FF_STRU, msid, size * count)
+    size = ida_struct.get_struc_size(msid)
+    return idc.add_struc_member(sid, name, offset, idc.FF_DATA | idc.FF_STRU, msid, size * count)
 

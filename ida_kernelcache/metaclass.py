@@ -1,3 +1,5 @@
+import ida_bytes
+import ida_bytes
 #
 # ida_kernelcache/metaclass.py
 # Brandon Azad

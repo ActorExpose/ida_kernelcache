@@ -1,3 +1,6 @@
+import ida_bytes
+import ida_bytes
+import ida_bytes
 #
 # scripts/find_virtual_method_overrides.py
 # Brandon Azad
@@ -50,8 +53,8 @@ Find virtual method overrides
     for classinfo in baseinfo.descendants():
         for _, override, _ in kc.vtable.class_vtable_overrides(classinfo, superinfo=baseinfo,
                 methods=True):
-            name = idc.NameEx(idc.BADADDR, override)
-            demangled = idc.Demangle(name, idc.GetLongPrm(idc.INF_SHORT_DN))
+            name = idc.get_name(idc.BADADDR, override)
+            demangled = idc.demangle_name(name, idc.get_inf_attr(idc.INF_SHORT_DN))
             name = demangled if demangled else name
             if method in name:
                 print '{:#x}  {}'.format(override, classinfo.classname)

@@ -1,3 +1,4 @@
+import ida_bytes
 #
 # ida_kernelcache.py
 # Brandon Azad

@@ -1,3 +1,4 @@
+import ida_bytes
 #
 # ida_kernelcache/__init__.py
 # Brandon Azad
@@ -8,6 +9,7 @@
 # This isn't kernelcache-specific, but it's useful to have access to in the interpreter and other
 # scripts.
 import ida_utilities
+import ida_auto
 
 import build_struct
 import class_struct
@@ -21,9 +23,15 @@ import stub
 import tagged_pointers
 import vtable
 
+# copyright @asiagaming
+import joker
+
 from classes import (ClassInfo, collect_class_info, class_info)
 from kplist  import (kplist_parse)
 from segment import (kernelcache_kext)
+
+def autoanalyze():
+    ida_auto.auto_wait()
 
 def kernelcache_process(untag_pointers=True):
     """Process the kernelcache in IDA for the first time.
@@ -40,10 +48,14 @@ def kernelcache_process(untag_pointers=True):
         * Symbolicates methods in vtables based on the method names in superclasses.
         * Creates IDA structs representing the C++ classes in the kernel.
     """
+    iometa = ida_kernwin.ask_str("/tmp/kernel.txt", 0, "iometa result file location")
+    jtool2 = ida_kernwin.ask_str("/tmp/kernel_jtool2.txt", 0, "jtool2 analyze file location")
+
+    joker.analyze(iometa, jtool2)
+
     import idaapi
     import idc
-    def autoanalyze():
-        idc.Wait()
+
     autoanalyze()
     if (kernel.kernelcache_format == kernel.KC_12_MERGED
             and untag_pointers
