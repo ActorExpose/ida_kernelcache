@@ -1,5 +1,5 @@
 # Based on Brandon Azad's ida_kernelcache
-## 필요한 툴
+## Requirement
 - [iometa](https://github.com/Siguza/iometa)
 - [jtool2](http://www.newosxbook.com/tools/jtool.html)
   
