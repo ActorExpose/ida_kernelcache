@@ -48,6 +48,7 @@ def kernelcache_process(untag_pointers=True):
         * Symbolicates methods in vtables based on the method names in superclasses.
         * Creates IDA structs representing the C++ classes in the kernel.
     """
+    import ida_kernwin
     iometa = ida_kernwin.ask_str("/tmp/kernel.txt", 0, "iometa result file location")
     jtool2 = ida_kernwin.ask_str("/tmp/kernel_jtool2.txt", 0, "jtool2 analyze file location")
 
